@@ -17,7 +17,7 @@ var (
 type handler struct {
 	prefix      string
 	options     Options
-	handlerFunc func(Session)
+	handlerFunc func(Session, *http.Request)
 	mappings    []*mapping
 
 	sessionsMux sync.Mutex
@@ -26,11 +26,11 @@ type handler struct {
 
 // NewHandler creates new HTTP handler that conforms to the basic net/http.Handler interface.
 // It takes path prefix, options and sockjs handler function as parameters
-func NewHandler(prefix string, opts Options, handleFunc func(Session)) http.Handler {
+func NewHandler(prefix string, opts Options, handleFunc func(Session, *http.Request)) http.Handler {
 	return newHandler(prefix, opts, handleFunc)
 }
 
-func newHandler(prefix string, opts Options, handlerFunc func(Session)) *handler {
+func newHandler(prefix string, opts Options, handlerFunc func(Session, *http.Request)) *handler {
 	h := &handler{
 		prefix:      prefix,
 		options:     opts,
@@ -118,17 +118,21 @@ func (h *handler) parseSessionID(url *url.URL) (string, error) {
 func (h *handler) sessionByRequest(req *http.Request) (*session, error) {
 	h.sessionsMux.Lock()
 	defer h.sessionsMux.Unlock()
+
 	sessionID, err := h.parseSessionID(req.URL)
 	if err != nil {
 		return nil, err
 	}
+
 	sess, exists := h.sessions[sessionID]
+
 	if !exists {
 		sess = newSession(req, sessionID, h.options.DisconnectDelay, h.options.HeartbeatDelay)
 		h.sessions[sessionID] = sess
 		if h.handlerFunc != nil {
-			go h.handlerFunc(sess)
+			go h.handlerFunc(sess, req)
 		}
+
 		go func() {
 			<-sess.closedNotify()
 			h.sessionsMux.Lock()
@@ -136,5 +140,6 @@ func (h *handler) sessionByRequest(req *http.Request) (*session, error) {
 			h.sessionsMux.Unlock()
 		}()
 	}
+
 	return sess, nil
 }

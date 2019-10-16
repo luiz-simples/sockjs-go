@@ -38,7 +38,7 @@ func (h *handler) sockjsWebsocket(rw http.ResponseWriter, req *http.Request) {
 	receiver := newWsReceiver(conn, h.options.WebsocketWriteTimeout)
 	sess.attachReceiver(receiver)
 	if h.handlerFunc != nil {
-		go h.handlerFunc(sess)
+		go h.handlerFunc(sess, req)
 	}
 	readCloseCh := make(chan struct{})
 	go func() {
